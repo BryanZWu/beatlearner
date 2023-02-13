@@ -1,0 +1,46 @@
+{
+  "_version": "2.0.0",
+  "_songName": "Seishun Complex",
+  "_songSubName": "Bocchi the Rock! OP",
+  "_songAuthorName": "Kessoku Band",
+  "_levelAuthorName": "Poochy",
+  "_beatsPerMinute": 190,
+  "_shuffle": 0,
+  "_shufflePeriod": 0.5,
+  "_previewStartTime": 29.5,
+  "_previewDuration": 29.88,
+  "_songFilename": "Seishun Complex.egg",
+  "_coverImageFilename": "Seishun Complex.png",
+  "_environmentName": "DefaultEnvironment",
+  "_allDirectionsEnvironmentName": "GlassDesertEnvironment",
+  "_songTimeOffset": 0,
+  "_customData": {
+    "_editors": {
+      "_lastEditedBy": "ChroMapper",
+      "ChroMapper": {
+        "version": "0.8.454"
+      }
+    }
+  },
+  "_difficultyBeatmapSets": [
+    {
+      "_beatmapCharacteristicName": "Standard",
+      "_difficultyBeatmaps": [
+        {
+          "_difficulty": "Expert",
+          "_difficultyRank": 7,
+          "_beatmapFilename": "ExpertStandard.dat",
+          "_noteJumpMovementSpeed": 16,
+          "_noteJumpStartBeatOffset": -0.18
+        },
+        {
+          "_difficulty": "ExpertPlus",
+          "_difficultyRank": 9,
+          "_beatmapFilename": "ExpertPlusStandard.dat",
+          "_noteJumpMovementSpeed": 17,
+          "_noteJumpStartBeatOffset": -0.3
+        }
+      ]
+    }
+  ]
+}
