@@ -63,7 +63,7 @@ def train():
             optimizer.zero_grad()
             output = model(audio)
             # Output is shape (batch_size, song_length, 21)
-            # 0-4 _lineIndex, 4-7 _lineLayer, 7-11 _type, 11-20 _time, 20 exists
+            # 0-4 _lineIndex, 4-7 _lineLayer, 7-11 _type, 11-20 _cutDirection, 20 exists
             # BCE loss on 20, and then cross entropy loss on the rest.
             loss = bce(output[:, :, 20], pts[:, :, 20]) * hparams['exists_weight']
             loss += ce(output[:, :, :4].permute(0, 2, 1), pts[:, :, :4])

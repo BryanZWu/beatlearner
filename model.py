@@ -111,7 +111,7 @@ class MapNet(nn.Module):
         self.vqvae = vqvae
         self.decoder = decoder
 
-    def forward(self, x, end_inds):
+    def forward(self, x, end_inds, language_condition):
         '''
         The forward pass. Takes in a raw audio waveform and outputs a beatsaber map of the audio.
 
@@ -120,7 +120,7 @@ class MapNet(nn.Module):
             end_inds: (Batch). The index of the last frame of the input sequence for each batch.
         '''
         # Encode the audio. Output is of shape (Batch, Tokens, Num_Audio_Features)
-        x, _ = self.vqvae.encode(x)
+        x, _ = self.vqvae(x, language_condition, end_inds)
         # Decode the map from the audio
         x = self.decoder(x, x, end_inds)
         return x
