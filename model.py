@@ -121,3 +121,4 @@ class MapNet(nn.Module):
         x = self.decoder(x, x, end_inds)
         return x
         
+# TODOS: Pos encoding, end_ind masking.
