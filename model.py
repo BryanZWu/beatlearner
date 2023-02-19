@@ -1,10 +1,13 @@
 import torch
 import torchaudio 
 import math
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from transformers import set_seed, JukeboxVQVAE
+
+import json
+import os
 
 class ConditionedSparseAttention(nn.Module):
     '''
@@ -150,4 +153,50 @@ class MapNet(nn.Module):
         return x
 
         
-# TODOS: Pos encoding, end_ind masking.
+def run_model(data):
+    import torch
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # actually it was running fine without the tokens hmmm
+    model = JukeboxVQVAE.from_pretrained("openai/jukebox-1b-lyrics",\
+                                        cache_dir=VAE_CACHE).eval()
+    set_seed(0)
+    model.levels=1
+    for _ in range(2):
+        model.encoders.pop(0)
+    model.decoders = torch.nn.ModuleList()
+    model.to(device)
+    
+    input_audio = data.to(device)# .T.unsqueeze(0)
+    results = model.encode(input_audio.to(device))
+    
+    print("IN_SHAPE", data.shape) # should be batched
+    print("OUT_SHAPE", results[0].shape)
+    return results[0].cpu() # get the single result
+
+def encoder():
+    '''
+    This returns a list of size (B, embeddings) for each audio input.
+    '''
+    import torchaudio
+    import torch
+    # from google.cloud import storage
+    # from google.oauth2 import service_account
+    # import io
+    # service_account_info = json.loads(os.environ["CLOUD_INFO"])
+    # credentials = service_account.Credentials.from_service_account_info(service_account_info)
+    # client = storage.Client(credentials=credentials)
+    # bucket = client.get_bucket("sabermaps")
+    # i = 0 
+    # datas = []
+    # for blob in bucket.list_blobs(): # prefix='zipped'
+    #     # TODO: IGNORE ALL ZIPS
+    #     # if blob.name.endswith(".zip"):
+    #     #     continue
+    #     if blob.name.endswith(".egg"):
+    #         file_as_string = blob.download_as_string()
+    #         # convert the string to bytes and then finally to audio samples as floats 
+    #         # and the audio sample rate
+    #         data, sample_rate = torchaudio.load(io.BytesIO(file_as_string))
+    #         datas.append(data.mean(0, keepdim=True).T) # ESSENTIAL PREPROCESSING: Average out the channel, 
+    datas = torch.nn.utils.rnn.pad_sequence(datas, batch_first=True) #torch.stack(datas)
+    res = run_model.call(datas)

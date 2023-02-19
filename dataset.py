@@ -72,7 +72,6 @@ class MapDataset(torch.utils.data.Dataset):
             notes = dat['_notes']
             song_length = audio.shape[1]
             pt = self.map2torch(notes, bpm, song_length, sample_rate=sample_rate)
-    
         return audio, pt
     
     def get_pt_from_dat(self, dat):
@@ -118,8 +117,8 @@ class MapDataset(torch.utils.data.Dataset):
             out_tensor[int(note['_time'] * factor)] = note2tensor(note)
         return out_tensor
 
-    bs_map = json.load(open('test_map/ExpertStandard.dat'))
-    bs_info = json.load(open('test_map/info.dat'))
+    # bs_map = json.load(open('test_map/ExpertStandard.dat'))
+    # bs_info = json.load(open('test_map/info.dat'))
 
     # Find the length of the song by looking at the ogg file.
     ogg_file = 'test_map/Seishun Complex.egg'
