@@ -46,8 +46,9 @@ import torchaudio
 import modal
 
 stub = modal.Stub("map2torch", image=modal.Image.debian_slim().pip_install(\
-    ['torchaudio', TODO]))
+    ['torchaudio']))
 
+@stub.function()
 def map2torch(notes, bpm, song_length, sample_rate=41_000, hop_length=128):
     """
     Converts a list of notes from beats to timestamps. 
@@ -86,20 +87,21 @@ def map2torch(notes, bpm, song_length, sample_rate=41_000, hop_length=128):
         out_tensor[int(note['_time'] * factor)] = note2tensor(note)
     return out_tensor
 
-bs_map = json.load(open('test_map/ExpertStandard.dat'))
-bs_info = json.load(open('test_map/info.dat'))
+# bs_map = json.load(open('test_map/ExpertStandard.dat'))
+# bs_info = json.load(open('test_map/info.dat'))
 
-# Find the length of the song by looking at the ogg file.
-ogg_file = 'test_map/Seishun Complex.egg'
-test_sample, sample_rate = torchaudio.load(ogg_file)
-song_length = test_sample.shape[1]
+# # Find the length of the song by looking at the ogg file.
+# ogg_file = 'test_map/Seishun Complex.egg'
+# test_sample, sample_rate = torchaudio.load(ogg_file)
+# song_length = test_sample.shape[1]
 
-bpm = bs_info['_beatsPerMinute']
-notes = bs_map['_notes']
+# bpm = bs_info['_beatsPerMinute']
+# notes = bs_map['_notes']
 
-tensor = map2torch(notes, bpm, song_length, sample_rate=sample_rate)
-# save the tensor to a file.
+# tensor = map2torch(notes, bpm, song_length, sample_rate=sample_rate)
+# # save the tensor to a file.
 
+@stub.function()
 def mapdir2torch(map_dir):
     """
     Converts one map directory to a torch tensor.
@@ -134,6 +136,7 @@ def mapdir2torch(map_dir):
         output_path = os.path.join(map_dir, map_file.replace('.dat', '.pt'))
         torch.save(tensor, output_path)
 
+@stub.function()
 def map_directory2torch(map_directory):
     """
     Converts a directory of map directories to torch tensors.
@@ -142,3 +145,21 @@ def map_directory2torch(map_directory):
     for map_dir in map_dirs:
         mapdir2torch(os.path.join(map_directory, map_dir))
 
+@stub.function(secret=modal.Secret.from_name("my-googlecloud-secret")) # this is run in the cloud
+def run_stub():
+
+    from google.cloud import storage
+    from google.oauth2 import service_account
+
+    service_account_info = json.loads(os.environ["CLOUD_INFO"])
+    credentials = service_account.Credentials.from_service_account_info(service_account_info)
+    client = storage.Client(credentials=credentials)
+    bucket = client.get_bucket("sabermaps")
+
+    map_directory2torch(bucket)
+
+
+
+@stub.local_entrypoint
+def main():
+    run_stub()
