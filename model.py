@@ -13,17 +13,16 @@ class ConditionedSparseAttention(nn.Module):
 
     It uses torch.nn.MultiheadAttention to compute the attention weights, but only attends to the last
     attention_window frames of the input sequence and the last attention_window frames of the conditioning sequence.
-
     '''
     def __init__(self, embed_dim, num_heads, dropout, attention_window):
         super(ConditionedSparseAttention, self).__init__()
-        self.attention = nn.MultiheadAttention(embed_dim, num_heads, dropout=dropout)
+        self.attention = nn.MultiheadAttention(embed_dim, num_heads, dropout=dropout, batch_first=True)
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.dropout = dropout
         self.attention_window = attention_window
 
-    def forward(self, x, condition, end_ind):
+    def forward(self, x, condition, end_inds):
         '''
         x should be (batch, input_time, input_size)
         condition should be (batch, cond_time, cond_size)
@@ -41,12 +40,12 @@ class ConditionedSparseAttention(nn.Module):
         cond_indices = torch.arange(cond_time).unsqueeze(0).repeat(batch_size, 1)
 
         # Masks for things that are after (end - attention_window)
-        input_mask_ge = torch.ge(input_indices, end_ind.unsqueeze(1)-self.attention_window).float()
-        cond_mask_ge = torch.ge(cond_indices, end_ind.unsqueeze(1)-self.attention_window).float()
+        input_mask_ge = torch.ge(input_indices, end_inds.unsqueeze(1)-self.attention_window).float()
+        cond_mask_ge = torch.ge(cond_indices, end_inds.unsqueeze(1)-self.attention_window).float()
 
         # Masks for things that are before (end)
-        input_mask_lt = torch.lt(input_indices, end_ind.unsqueeze(1)).float()
-        cond_mask_lt = torch.lt(cond_indices, end_ind.unsqueeze(1)).float()
+        input_mask_lt = torch.lt(input_indices, end_inds.unsqueeze(1)).float()
+        cond_mask_lt = torch.lt(cond_indices, end_inds.unsqueeze(1)).float()
 
         input_mask = input_mask_ge * input_mask_lt
         cond_mask = cond_mask_ge * cond_mask_lt
@@ -60,15 +59,6 @@ class ConditionedSparseAttention(nn.Module):
 
         return attended
 
-
-
-
-
-
-
-
-def x(): pass
-
 class MapNetDecoder(nn.Module):
     '''
     MapNetDecoder is a transformer decoder that takes in a conditioning sequence of audio features
@@ -78,26 +68,18 @@ class MapNetDecoder(nn.Module):
     The decoder is autoregressive, meaning that it can only attend to previous frames of the input sequence.
     '''
 
-    def __init__(self, input_size, hidden_size, output_size, num_heads, dropout,
-                    num_layers, max_seq_len, attention_window):
+    def __init__(self, ndims, num_heads, dropout, num_layers, attention_window):
         super(MapNetDecoder, self).__init__()
-        self.input_size = input_size
-        self.output_size = output_size
         self.num_heads = num_heads
         self.dropout = dropout
         self.num_layers = num_layers
-        self.max_seq_len = max_seq_len
         self.attention_window = attention_window
         self.layers = nn.ModuleList([])
         for i in range(num_layers):
-            if i == 0:
-                self.layers.append(ConditionedSparseAttention(input_size, hidden_size, num_heads, dropout))
-            if i == num_layers - 1:
-                self.layers.append(ConditionedSparseAttention(hidden_size, output_size, num_heads, dropout))
-            else:
-                self.layers.append(ConditionedSparseAttention(hidden_size, hidden_size, num_heads, dropout))
+            self.layers.append(ConditionedSparseAttention(ndims, num_heads, dropout, attention_window))
+        self.output_layer = nn.Linear(ndims, 21)
     
-    def forward(self, x, condition, condition_mask, x_mask):
+    def forward(self, x, condition, end_inds):
         '''
         The forward pass. Applies conditional sparse attention to the input sequence, using 
         CONDITION as the conditioning sequence. The conditional sparse attention is applied
@@ -107,6 +89,35 @@ class MapNetDecoder(nn.Module):
         Args:
             x: (Batch, Time, Channels). The map we are building on
             condition: (Batch, Time, Channels). The Condition, in our case, the audio encoding.
+            end_inds: (Batch). The index of the last frame of the input sequence for each batch.
         '''
-        # First, create the relevant
-        pass
+        for layer in self.layers:
+            x = layer(x, condition, end_inds)
+        x = self.output_layer(x)
+        return x
+    
+
+class MapNet(nn.Module):
+    '''
+    MapNet is a model that takes in a raw audio waveform and outputs a beatsaber map of
+    the audio. It is composed of a Jukebox VQVAE and a MapNetDecoder.
+    '''
+    def __init__(self, vqvae, decoder):
+        super(MapNet, self).__init__()
+        self.vqvae = vqvae
+        self.decoder = decoder
+
+    def forward(self, x, end_inds):
+        '''
+        The forward pass. Takes in a raw audio waveform and outputs a beatsaber map of the audio.
+
+        Args:
+            x: (Batch, Time, Channels). The raw audio waveform.
+            end_inds: (Batch). The index of the last frame of the input sequence for each batch.
+        '''
+        # Encode the audio
+        x, _ = self.vqvae.encode(x)
+        # Decode the map from the audio
+        x = self.decoder(x, x, end_inds)
+        return x
+        
