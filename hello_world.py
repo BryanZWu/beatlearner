@@ -4,6 +4,8 @@ import os
 import modal
 from google.cloud import storage
 from google.oauth2 import service_account
+import time
+
 
 stub = modal.Stub("jukebox", image=modal.Image.debian_slim().pip_install(\
     ["transformers","torchaudio","torch","google-cloud-storage"]))
@@ -20,27 +22,35 @@ CACHE_DIR = "/cache"
 VAE_CACHE = "/vae_cache"
 
 @stub.function(gpu="A100",\
-               shared_volumes={VAE_CACHE: volume2},
+               shared_volumes={VAE_CACHE: volume2},\
     # Set the transformers cache directory to the volume we created above.
     # For details, see https://huggingface.co/transformers/v4.0.1/installation.html#caching-models
     secret=modal.Secret.from_name("huggingface-read-token")) # this is run in the cloud
 def run_model(data):
     from transformers import set_seed, JukeboxVQVAE
-    # test_sample, sample_rate = torchaudio.load('Seishun Complex.egg')
-    # print(test_sample.shape, sample_rate)
-    # How does this work with jukebox sample??
-    # if os.environ["TRANSFORMERS_CACHE"] is None:
-    #     os.environ["TRANSFORMERS_CACHE"] = JukeboxModel.from_pretrained("openai/jukebox-1b-lyrics", min_duration=0).eval()
-    #model = os.environ["TRANSFORMERS_CACHE"]
-
+    import torch
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # actually it was running fine without the tokens hmmm
     model = JukeboxVQVAE.from_pretrained("openai/jukebox-1b-lyrics",\
                                         cache_dir=VAE_CACHE).eval()
     set_seed(0)
-
-    results = model.encode(data) # data.swapaxes(1,2)
-    print(results.shape)
-    return results
+    for _ in range(2):
+        model.encoders.pop(-1)
+    model.decoders = torch.nn.ModuleList()
+    print(model.encoders)
+    model.to(device)
+    start = time.time()
+    input_audio = data.permute(0, 2, 1).to(device)
+    results = model.encode(input_audio) # data.swapaxes(1,2), start_level=1
+    end = time.time()
+    print("Time to encode: ", end - start)
+    print("IN_SHAPE", data.shape) # should be batched
+    print("OUT_SHAPE", results[1].shape)
+    # start = time.time()
+    # results = model.encode(data, bs_chunks = 100) # data.swapaxes(1,2)
+    # end = time.time()
+    # print("Time to encode: ", end - start)
+    return results[1]
     # model.prune_heads({
     # -1: [i for i in range(20)]
 
@@ -66,17 +76,18 @@ def load_data():
             # convert the string to bytes and then finally to audio samples as floats 
             # and the audio sample rate
             data, sample_rate = torchaudio.load(io.BytesIO(file_as_string))
-            data = data.mean(0, keepdim=True).T
+            # data = data.mean(0, keepdim=True).T
             #print(data.unsqueeze(0).shape)
-            out = list(run_model.call(data.unsqueeze(0)))
-            #print(data.shape)
-            #datas.append(data.mean(0).T)
-            print(blob.name)
+            # out = list(run_model.call(data.unsqueeze(0)))
+            print(data.shape)
+            datas.append(data.mean(0, keepdim=True).T)
+            #print(blob.name)
             i+=1
         if i==2: break
-    # datas = torch.nn.utils.rnn.pad_sequence(datas, batch_first=True).swapaxes(1,2) #torch.stack(datas)
+
+    datas = torch.nn.utils.rnn.pad_sequence(datas, batch_first=True).swapaxes(1,2) #torch.stack(datas)
     # print(datas.shape)
-    # res = list(run_model.map(datas))
+    res = list(run_model.call(datas))
 
 @stub.local_entrypoint
 def main():
