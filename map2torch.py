@@ -107,9 +107,11 @@ def mapdir2torch(map_dir):
     Converts one map directory to a torch tensor.
     """
     # Anything that ends in standard.dat is a map file.
-    map_files = [f for f in os.listdir(map_dir) if f.endswith('Standard.dat')]
-    if len(map_files) == 0:
-        raise ValueError('No map files found in directory.')
+    # map_files = [f for f in os.listdir(map_dir) if f.endswith('Standard.dat')]
+    # if len(map_files) == 0:
+    #     raise ValueError('No map files found in directory.')
+
+    
     for map_file in map_files:
         map_path = os.path.join(map_dir, map_file)
         map_data = json.load(open(map_path))
@@ -131,23 +133,24 @@ def mapdir2torch(map_dir):
         bpm = info_data['_beatsPerMinute']
         notes = map_data['_notes']
 
-        tensor = map2torch(notes, bpm, song_length, sample_rate=sample_rate)
+        # IDEALLY PARALLELIZE DATA
+        tensor = map2torch.map(notes, bpm, song_length, sample_rate=sample_rate)
         # save the tensor to a file.
         output_path = os.path.join(map_dir, map_file.replace('.dat', '.pt'))
         torch.save(tensor, output_path)
 
 @stub.function()
-def map_directory2torch(map_directory):
+def map_directory2torch(bucket):
     """
     Converts a directory of map directories to torch tensors.
     """
-    map_dirs = [f for f in os.listdir(map_directory) if os.path.isdir(os.path.join(map_directory, f))]
-    for map_dir in map_dirs:
-        mapdir2torch(os.path.join(map_directory, map_dir))
+    # TODO: elim func
+    for blob in bucket.list_blobs():
+        if blob.name.endswith('.dat'):
+            mapdir2torch.call(os.path.join(map_directory, map_dir))
 
 @stub.function(secret=modal.Secret.from_name("my-googlecloud-secret")) # this is run in the cloud
 def run_stub():
-
     from google.cloud import storage
     from google.oauth2 import service_account
 
@@ -155,11 +158,8 @@ def run_stub():
     credentials = service_account.Credentials.from_service_account_info(service_account_info)
     client = storage.Client(credentials=credentials)
     bucket = client.get_bucket("sabermaps")
-
     map_directory2torch(bucket)
-
-
 
 @stub.local_entrypoint
 def main():
-    run_stub()
+    run_stub.call()

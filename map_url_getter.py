@@ -12,7 +12,6 @@ import csv
 import urllib.parse 
 import time
 
-google_cloud_storage_url = "TODO"
 output_tsv = "map_download_urls.tsv"
 
 

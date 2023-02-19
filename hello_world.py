@@ -36,10 +36,11 @@ def run_model(data):
     # actually it was running fine without the tokens hmmm
     model = JukeboxVQVAE.from_pretrained("openai/jukebox-1b-lyrics",\
                                         cache_dir=VAE_CACHE).eval()
-    
     set_seed(0)
-    print(model(data.swapaxes(1,2)).shape)
 
+    results = model.encode(data) # data.swapaxes(1,2)
+    print(results.shape)
+    return results
     # model.prune_heads({
     # -1: [i for i in range(20)]
 
@@ -65,14 +66,17 @@ def load_data():
             # convert the string to bytes and then finally to audio samples as floats 
             # and the audio sample rate
             data, sample_rate = torchaudio.load(io.BytesIO(file_as_string))
+            data = data.mean(0, keepdim=True).T
+            #print(data.unsqueeze(0).shape)
+            out = list(run_model.call(data.unsqueeze(0)))
             #print(data.shape)
-            datas.append(data.mean(0,keepdim=True).T)
+            #datas.append(data.mean(0).T)
             print(blob.name)
             i+=1
         if i==2: break
-    datas = torch.nn.utils.rnn.pad_sequence(datas, batch_first=True).swapaxes(1,2) #torch.stack(datas)
-    print(datas.shape)
-    run_model.map(datas)
+    # datas = torch.nn.utils.rnn.pad_sequence(datas, batch_first=True).swapaxes(1,2) #torch.stack(datas)
+    # print(datas.shape)
+    # res = list(run_model.map(datas))
 
 @stub.local_entrypoint
 def main():
