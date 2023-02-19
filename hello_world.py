@@ -25,7 +25,7 @@ VAE_CACHE = "/vae_cache"
                shared_volumes={VAE_CACHE: volume2},\
     # Set the transformers cache directory to the volume we created above.
     # For details, see https://huggingface.co/transformers/v4.0.1/installation.html#caching-models
-    secret=modal.Secret.from_name("huggingface-read-token")) # this is run in the cloud
+    ) # this is run in the cloud
 def run_model(data):
     from transformers import set_seed, JukeboxVQVAE
     import torch
@@ -37,8 +37,8 @@ def run_model(data):
     for _ in range(2):
         model.encoders.pop(-1)
     model.decoders = torch.nn.ModuleList()
-    print(model.encoders)
     model.to(device)
+    print('model moved to device')
     start = time.time()
     input_audio = data.permute(0, 2, 1).to(device)
     results = model.encode(input_audio) # data.swapaxes(1,2), start_level=1

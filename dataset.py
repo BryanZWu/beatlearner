@@ -1,5 +1,11 @@
 import torch
 import os
+import torchaudio
+
+from google.cloud import storage
+from google.oauth2 import service_account
+import io
+import random
 
 class MapDataset(torch.utils.data.Dataset):
     '''
@@ -8,22 +14,16 @@ class MapDataset(torch.utils.data.Dataset):
     Data is in the google cloud in the following structure:
     - bucket
         - map_directory
-            - song.egg
+            - [songname].egg
             - [difficulty]Standard.pt
         - map_directory
     
     Each training point is one egg file, paired with the corresponding
     dat file. All egg files are ogg files that contain 44.1khz audio.
-
-    Due to the size of the dataset, we do not load the entire dataset
-    in memory. Instead, we will chunk the dataset into smaller pieces
-    and load them as needed. This is done in the __getitem__ method.
     '''
-    chunk_size = 1000
     def __init__(self, bucket):
         self.bucket = bucket
         self.map_set = set()
-        self.chunk = None
         
         for blob in self.bucket.list_blobs():
             if blob.name.endswith('.egg'):
@@ -35,11 +35,37 @@ class MapDataset(torch.utils.data.Dataset):
         return len(self.bucket.list_blobs(prefix=self.map_directory))
     
     def __getitem__(self, idx):
-        # Automatical chunking of the dataset. This is done by
-        # splitting the dataset into chunks of size 1000, and
-        # loading the chunk that the index is in.
+        map = self.map_list[idx]
+
+        audio = None
+        pts = []
+        dats = []
         
-        # Get the chunk number
-        chunk_num = idx // self.chunk_size
-        # Get the index of the item in the chunk
-        chunk_idx = idx % self.chunk_size
+        # Get one egg file and one random dat file or pt file
+        for blob in self.bucket.list_blobs(prefix=map):
+            if blob.name.endswith('.egg'):
+                # download the egg file and then read it into a tensor
+                file_as_string = blob.download_as_string()
+                data, sample_rate = torchaudio.load(io.BytesIO(file_as_string))
+                audio = data.mean(0, keepdim=True).T
+            
+            elif blob.name.endswith('.pt'):
+                # download the pt file and then read it into a tensor
+                file_as_string = blob.download_as_string()
+                pts.append(torch.load(io.BytesIO(file_as_string)))
+            
+            elif blob.name.endswith('.dat'):
+                dats.append(blob.download_as_string())
+            
+        if pts:
+            pt = random.choice(pts)
+        else:
+            pt = self.get_pt_from_dat(random.choice(dats))
+    
+        return audio, pt
+    
+    def get_pt_from_dat(self, dat):
+        '''
+        Convert a dat file into a pt file.
+        '''
+        pass

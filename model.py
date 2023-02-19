@@ -1,5 +1,6 @@
 import torch
 import torchaudio 
+import math
 
 import torch
 import torch.nn as nn
@@ -115,10 +116,38 @@ class MapNet(nn.Module):
             x: (Batch, Time, Channels). The raw audio waveform.
             end_inds: (Batch). The index of the last frame of the input sequence for each batch.
         '''
-        # Encode the audio
+        # Encode the audio. Output is of shape (Batch, Tokens, Num_Audio_Features)
         x, _ = self.vqvae.encode(x)
         # Decode the map from the audio
         x = self.decoder(x, x, end_inds)
         return x
+    
+    def positional_encoding(self, x, max_len=1_000_000):
+        '''
+        Adds a positional encoding to the input sequence. 
+        '''
+        batch_size, time, data_dim = x.shape
+        
+        # Create a tensor of indices
+        pos = torch.arange(time).unsqueeze(1).repeat(1, data_dim)
+
+        div_term = torch.exp(torch.arange(0, data_dim, 2) * -(math.log(10000.0) / data_dim))
+
+        # Create a tensor of positional encodings
+        pos_encoding = torch.zeros(batch_size, max_len, data_dim)
+
+        # Even channels
+        pos_encoding[:, :, 0::2] = torch.sin(pos[:, 0::2] * div_term)
+        # Odd channels
+        pos_encoding[:, :, 1::2] = torch.cos(pos[:, 1::2] * div_term)
+
+        # Truncate the positional encoding to the length of the input sequence
+        pos_encoding = pos_encoding[:, :time, :]
+
+        # Add the positional encoding to the input sequence
+        x = x + pos_encoding
+
+        return x
+
         
 # TODOS: Pos encoding, end_ind masking.
