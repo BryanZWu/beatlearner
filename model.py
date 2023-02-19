@@ -151,27 +151,24 @@ class MapNet(nn.Module):
         x = x + pos_encoding
 
         return x
-
         
-def run_model(data):
-    import torch
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def get_vq_vae():
     # actually it was running fine without the tokens hmmm
-    model = JukeboxVQVAE.from_pretrained("openai/jukebox-1b-lyrics",\
-                                        cache_dir=VAE_CACHE).eval()
+    model = JukeboxVQVAE.from_pretrained("openai/jukebox-1b-lyrics", cache_dir="/tmp").eval()
     set_seed(0)
     model.levels=1
     for _ in range(2):
         model.encoders.pop(0)
     model.decoders = torch.nn.ModuleList()
-    model.to(device)
+
+    return model
     
-    input_audio = data.to(device)# .T.unsqueeze(0)
-    results = model.encode(input_audio.to(device))
+    # input_audio = data.to(device)# .T.unsqueeze(0)
+    # results = model.encode(input_audio.to(device))
     
-    print("IN_SHAPE", data.shape) # should be batched
-    print("OUT_SHAPE", results[0].shape)
-    return results[0].cpu() # get the single result
+    # print("IN_SHAPE", data.shape) # should be batched
+    # print("OUT_SHAPE", results[0].shape)
+    # return results[0].cpu() # get the single result
 
 def encoder():
     '''

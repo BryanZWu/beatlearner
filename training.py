@@ -15,29 +15,34 @@ from google.oauth2 import service_account
 import io
 
 from dataset import MapDataset
-from model import MapNet
+from model import MapNet, get_vq_vae, MapNetDecoder
 
 hparams = {
     'batch_size': 1,
     'learning_rate': 1e-4,
     'num_epochs': 100,
-    'num_workers': 4,
+    'num_workers': 1,
     'save_interval': 20, # In batches
     'exists_weight': 10, # Weight for the exists loss compared to each one of the other losses
 }
 
 
 def train():
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # set up the dataset
-    credentials = service_account.Credentials.from_service_account_file('credentials.json')
-    client = storage.Client(project='beat-saber-ml', credentials=credentials)
-    bucket = client.get_bucket('beat-saber-ml')
-    dataset = MapDataset(bucket)
+    # credentials = service_account.Credentials.from_service_account_file('credentials.json')
+    client = storage.Client(project='beat-saber-ml')
+    bucket = client.get_bucket('sabermaps')
+    dataset = MapDataset()
     dataloader = data.DataLoader(dataset, batch_size=hparams['batch_size'], shuffle=True, num_workers=hparams['num_workers'])
+    print('Dataset loaded!')
+
+    encoder = get_vq_vae()
+    decoder = MapNetDecoder(128, 8, 0.1, 3, 128)
 
     # set up the model
-    model = MapNet()
-    model = model.cuda()
+    model = MapNet(encoder, decoder)
+    model = model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=hparams['learning_rate'])
     bce = nn.BCELoss()
     ce = nn.CrossEntropyLoss()
@@ -52,8 +57,8 @@ def train():
     # train the model
     for epoch in range(hparams['num_epochs']):
         for i, (audio, pts) in enumerate(dataloader):
-            audio = audio.cuda()
-            pts = pts.cuda()
+            audio = audio.to(device)
+            pts = pts.to(device)
 
             optimizer.zero_grad()
             output = model(audio)

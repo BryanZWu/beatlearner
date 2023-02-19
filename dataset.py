@@ -22,21 +22,27 @@ class MapDataset(torch.utils.data.Dataset):
     Each training point is one egg file, paired with the corresponding
     dat file. All egg files are ogg files that contain 44.1khz audio.
     '''
-    def __init__(self, bucket):
-        self.bucket = bucket
-        self.map_set = set()
+    def __init__(self):
+        client = storage.Client(project='beat-saber-ml')
+        self.bucket = client.get_bucket('sabermaps')
         
-        for blob in self.bucket.list_blobs():
-            if blob.name.endswith('.egg'):
-                map_dir = os.path.dirname(blob.name)
-                self.map_set.add(map_dir)
-        self.map_list = list(self.map_set)
+        self.map_generator = self.bucket.list_blobs(prefix='zipped/r2cdn.beatsaver.com/')
     
     def __len__(self):
-        return len(self.bucket.list_blobs(prefix=self.map_directory))
-    
+        return 70_000
+
     def __getitem__(self, idx):
-        map = self.map_list[idx]
+        # Keep sampling until we get a Standard.pt or Standard.dat file
+        while True:
+            try:
+                map = next(self.map_generator)
+            except StopIteration:
+                self.map_generator = self.bucket.list_blobs(prefix='zipped/r2cdn.beatsaver.com/')
+                map = next(self.map_generator)
+            if map.name.endswith('Standard.pt') or map.name.endswith('Standard.dat'):
+                break
+
+        map = map.name.split('/')[:-1]
 
         audio = None
         pts = []
@@ -46,14 +52,14 @@ class MapDataset(torch.utils.data.Dataset):
         for blob in self.bucket.list_blobs(prefix=map):
             if blob.name.endswith('.egg'):
                 # download the egg file and then read it into a tensor
-                file_as_string = blob.download_as_string()
-                data, sample_rate = torchaudio.load(io.BytesIO(file_as_string))
+                file_as_bytes = blob.download_as_bytes()
+                data, sample_rate = torchaudio.load(io.BytesIO(file_as_bytes))
                 audio = data.mean(0, keepdim=True).T
             
             elif blob.name.endswith('.pt'):
                 # download the pt file and then read it into a tensor
-                file_as_string = blob.download_as_string()
-                pts.append(torch.load(io.BytesIO(file_as_string)))
+                file_as_bytes = blob.download_as_bytes()
+                pts.append(torch.load(io.BytesIO(file_as_bytes)))
             
             elif blob.name.endswith('.dat'):
                 dats.append(blob)
@@ -116,18 +122,3 @@ class MapDataset(torch.utils.data.Dataset):
         for note in notes:
             out_tensor[int(note['_time'] * factor)] = note2tensor(note)
         return out_tensor
-
-    # bs_map = json.load(open('test_map/ExpertStandard.dat'))
-    # bs_info = json.load(open('test_map/info.dat'))
-
-    # Find the length of the song by looking at the ogg file.
-    ogg_file = 'test_map/Seishun Complex.egg'
-    test_sample, sample_rate = torchaudio.load(ogg_file)
-    song_length = test_sample.shape[1]
-
-    bpm = bs_info['_beatsPerMinute']
-    notes = bs_map['_notes']
-
-    tensor = map2torch(notes, bpm, song_length, sample_rate=sample_rate)
-    # save the tensor to a file.
-
