@@ -15,7 +15,7 @@ class ConditionedSparseAttention(torch.nn.Module):
         self.num_features = num_features
         self.attention_window = attention_window
         self.in_channels = in_channels
-        
+
 
     def forward(self, x, condition, condition_mask, x_mask):
         '''
