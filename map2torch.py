@@ -43,6 +43,10 @@ import json
 import os
 import math
 import torchaudio
+import modal
+
+stub = modal.Stub("map2torch", image=modal.Image.debian_slim().pip_install(\
+    ['torchaudio', TODO]))
 
 def map2torch(notes, bpm, song_length, sample_rate=41_000, hop_length=128):
     """
@@ -137,3 +141,4 @@ def map_directory2torch(map_directory):
     map_dirs = [f for f in os.listdir(map_directory) if os.path.isdir(os.path.join(map_directory, f))]
     for map_dir in map_dirs:
         mapdir2torch(os.path.join(map_directory, map_dir))
+
